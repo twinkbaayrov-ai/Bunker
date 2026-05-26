@@ -22,7 +22,6 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
-OPENROUTER_API_KEY = "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"
 
 [[ports]]
 localPort = 8080
