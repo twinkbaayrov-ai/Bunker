@@ -5,12 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import CardZero from "./card-zero";
 import PlayerCard from "./player-card";
 import HintCard from "./hint-card";
-import { ChevronLeft, ChevronRight, Camera, Download, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Camera, Share2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import html2canvas from "html2canvas";
 import { createRoot } from "react-dom/client";
-import JSZip from "jszip";
 import { toast } from "sonner";
 
 interface GameRouteProps {
@@ -19,33 +17,28 @@ interface GameRouteProps {
   setGameData: (data: GameData) => void;
 }
 
-function triggerDownload(href: string, filename: string) {
-  const link = document.createElement("a");
-  link.href = href;
-  link.download = filename;
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  setTimeout(() => document.body.removeChild(link), 300);
-}
-
-async function captureCard(player: Parameters<typeof PlayerCard>[0]["player"], index: number): Promise<Blob> {
+async function captureCard(
+  player: Parameters<typeof PlayerCard>[0]["player"],
+  index: number
+): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const container = document.createElement("div");
-    container.style.cssText = `
-      position: fixed;
-      top: -9999px;
-      left: -9999px;
-      width: 430px;
-      background-color: #0d0d0d;
-      font-family: 'Space Mono', monospace;
-      z-index: -1;
-    `;
+    container.style.cssText = [
+      "position:fixed",
+      "top:-9999px",
+      "left:-9999px",
+      "width:430px",
+      "background-color:#0d0d0d",
+      "font-family:'Space Mono',monospace",
+      "z-index:-999",
+      "visibility:visible",
+      "pointer-events:none",
+    ].join(";");
     document.body.appendChild(container);
-
     const root = createRoot(container);
     root.render(<PlayerCard player={player} index={index} />);
 
+    // Give more time on iOS (slower JS engines)
     setTimeout(async () => {
       try {
         const canvas = await html2canvas(container, {
@@ -56,45 +49,75 @@ async function captureCard(player: Parameters<typeof PlayerCard>[0]["player"], i
           width: 430,
           windowWidth: 430,
         });
-        canvas.toBlob((blob) => {
-          root.unmount();
-          document.body.removeChild(container);
-          if (blob) resolve(blob);
-          else reject(new Error("toBlob failed"));
-        }, "image/png");
+        canvas.toBlob(
+          (blob) => {
+            root.unmount();
+            document.body.removeChild(container);
+            if (blob) resolve(blob);
+            else reject(new Error("toBlob вернул null"));
+          },
+          "image/png"
+        );
       } catch (err) {
         root.unmount();
         document.body.removeChild(container);
         reject(err);
       }
-    }, 600);
+    }, 900);
   });
+}
+
+async function shareOrSave(blob: Blob, filename: string): Promise<void> {
+  const file = new File([blob], filename, { type: "image/png" });
+
+  // iOS и Android — нативный шаринг (сохранить в Фото, AirDrop и т.д.)
+  if (
+    typeof navigator.share === "function" &&
+    typeof navigator.canShare === "function" &&
+    navigator.canShare({ files: [file] })
+  ) {
+    await navigator.share({ files: [file], title: filename });
+    return;
+  }
+
+  // Desktop — скачать напрямую
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, 500);
 }
 
 export default function GameRoute({ id, gameData, setGameData }: GameRouteProps) {
   const [, setLocation] = useLocation();
   const cardRef = useRef<HTMLDivElement>(null);
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSharingAll, setIsSharingAll] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     if (!gameData) setLocation("/");
   }, [gameData, setLocation]);
 
   const handleSaveCurrent = useCallback(async () => {
-    if (!gameData) return;
-
-    if (id === "hint") return;
-
-    const toastId = "save-current";
-    toast.loading("Сохранение...", { id: toastId });
+    if (!gameData || isSaving) return;
+    setIsSaving(true);
+    const toastId = "save-one";
+    toast.loading("Готовлю изображение…", { id: toastId });
 
     try {
       let blob: Blob;
+      let filename: string;
 
       if (id === "0") {
         const el = cardRef.current;
-        if (!el) throw new Error("No element");
+        if (!el) throw new Error("No ref");
         const canvas = await html2canvas(el, {
           backgroundColor: "#000000",
           scale: 2,
@@ -102,57 +125,91 @@ export default function GameRoute({ id, gameData, setGameData }: GameRouteProps)
           logging: false,
         });
         blob = await new Promise<Blob>((res, rej) =>
-          canvas.toBlob((b) => (b ? res(b) : rej(new Error("toBlob failed"))), "image/png")
+          canvas.toBlob((b) => (b ? res(b) : rej(new Error("toBlob null"))), "image/png")
         );
-        triggerDownload(URL.createObjectURL(blob), "bunker-база.png");
+        filename = "bunker-база.png";
       } else {
         const playerIndex = parseInt(id) - 1;
         const player = gameData.players[playerIndex];
         if (!player) throw new Error("Player not found");
         blob = await captureCard(player, parseInt(id));
-        triggerDownload(URL.createObjectURL(blob), `досье-${id}-${player.profession}.png`);
+        filename = `досье-${id}-${player.profession}.png`;
       }
 
-      toast.success("Сохранено!", { id: toastId });
+      toast.dismiss(toastId);
+      await shareOrSave(blob, filename);
+      toast.success("Готово!");
     } catch (e) {
-      console.error(e);
-      toast.error("Ошибка сохранения", { id: toastId });
+      const err = e as Error;
+      if (err.name === "AbortError") {
+        toast.dismiss(toastId); // пользователь закрыл шаринг — это нормально
+      } else {
+        console.error(e);
+        toast.error("Ошибка сохранения", { id: toastId });
+      }
+    } finally {
+      setIsSaving(false);
     }
-  }, [id, gameData]);
+  }, [id, gameData, isSaving]);
 
-  const handleDownloadAll = useCallback(async () => {
-    if (!gameData || isExporting) return;
-
-    setIsExporting(true);
-    setExportProgress(0);
-    const toastId = "export-all";
-    toast.loading(`Подготовка карточек (0/${gameData.players.length})...`, { id: toastId });
+  const handleShareAll = useCallback(async () => {
+    if (!gameData || isSharingAll) return;
+    setIsSharingAll(true);
+    setProgress(0);
+    const toastId = "share-all";
+    toast.loading(`Готовлю (0/${gameData.players.length})…`, { id: toastId });
 
     try {
-      const zip = new JSZip();
+      const files: File[] = [];
 
       for (let i = 0; i < gameData.players.length; i++) {
         const player = gameData.players[i]!;
-        toast.loading(`Карточка ${i + 1}/${gameData.players.length}: ${player.profession}`, { id: toastId });
-        setExportProgress(i + 1);
-
+        toast.loading(`Карточка ${i + 1}/${gameData.players.length}…`, { id: toastId });
+        setProgress(i + 1);
         const blob = await captureCard(player, i + 1);
         const name = `${String(i + 1).padStart(2, "0")}-${player.profession.replace(/[\s/\\?%*:|"<>]/g, "_")}.png`;
-        zip.file(name, blob);
+        files.push(new File([blob], name, { type: "image/png" }));
       }
 
-      toast.loading("Создание ZIP...", { id: toastId });
-      const zipBlob = await zip.generateAsync({ type: "blob" });
-      triggerDownload(URL.createObjectURL(zipBlob), "bunker-cards.zip");
-      toast.success(`Скачано ${gameData.players.length} карточек!`, { id: toastId });
+      toast.dismiss(toastId);
+
+      // iOS/Android — шарим все сразу
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files })
+      ) {
+        await navigator.share({ files, title: "Карточки Бункера" });
+        toast.success(`${files.length} карточек готовы!`);
+      } else {
+        // Desktop — скачиваем по одной
+        for (const file of files) {
+          const url = URL.createObjectURL(file);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = file.name;
+          link.style.display = "none";
+          document.body.appendChild(link);
+          link.click();
+          await new Promise((r) => setTimeout(r, 200));
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+        toast.success(`Скачано ${files.length} карточек!`);
+      }
     } catch (e) {
-      console.error(e);
-      toast.error("Ошибка экспорта", { id: toastId });
+      const err = e as Error;
+      if (err.name !== "AbortError") {
+        console.error(e);
+        toast.error("Ошибка экспорта", { id: toastId });
+      } else {
+        toast.dismiss(toastId);
+      }
     } finally {
-      setIsExporting(false);
-      setExportProgress(0);
+      setIsSharingAll(false);
+      setProgress(0);
     }
-  }, [gameData, isExporting]);
+  }, [gameData, isSharingAll]);
 
   if (!gameData) return null;
 
@@ -178,12 +235,15 @@ export default function GameRoute({ id, gameData, setGameData }: GameRouteProps)
     return player ? <PlayerCard player={player} index={parseInt(id)} /> : null;
   };
 
-  const label = id === "0" ? "БАЗА" : id === "hint" ? "ПОДСКАЗКА" : `ДОСЬЕ ${id}/${gameData.players.length}`;
-  const canSaveCurrent = id !== "hint";
+  const label =
+    id === "0" ? "БАЗА" : id === "hint" ? "ПОДСКАЗКА" : `ДОСЬЕ ${id}/${gameData.players.length}`;
+  const canSave = id !== "hint";
+  const total = gameData.players.length;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-black relative">
-      <div ref={cardRef} className="flex-1 overflow-y-auto pb-36 no-scrollbar">
+      {/* Scrollable card area */}
+      <div ref={cardRef} className="flex-1 overflow-y-auto no-scrollbar" style={{ paddingBottom: "9rem" }}>
         <AnimatePresence mode="wait">
           <motion.div
             key={id}
@@ -198,62 +258,81 @@ export default function GameRoute({ id, gameData, setGameData }: GameRouteProps)
         </AnimatePresence>
       </div>
 
-      {/* Bottom nav */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto bg-black/95 backdrop-blur border-t border-white/10 p-3 z-40 space-y-2">
+      {/* Fixed bottom nav — safe area aware for iPhone */}
+      <div
+        className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto bg-black/95 backdrop-blur border-t border-white/10 z-40"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 12px)", padding: "12px 12px env(safe-area-inset-bottom, 12px)" }}
+      >
         {/* Progress bar */}
-        {isExporting && (
-          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+        {isSharingAll && (
+          <div className="h-0.5 bg-white/10 rounded-full overflow-hidden mb-2">
             <div
               className="h-full bg-green-500 rounded-full transition-all duration-300"
-              style={{ width: `${(exportProgress / gameData.players.length) * 100}%` }}
+              style={{ width: `${(progress / total) * 100}%` }}
             />
           </div>
         )}
 
-        {/* Nav row */}
-        <div className="flex justify-between items-center">
-          <Button variant="outline" onClick={handlePrev} size="sm"
-            className="bg-transparent border-white/20 text-white hover:bg-white/10 h-9 px-3">
+        {/* Arrow nav */}
+        <div className="flex justify-between items-center mb-2">
+          <Button
+            variant="outline"
+            onClick={handlePrev}
+            size="sm"
+            className="bg-transparent border-white/20 text-white hover:bg-white/10 h-9 px-3"
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="text-[10px] font-mono text-white/50 tracking-widest">{label}</div>
-          <Button variant="outline" onClick={handleNext} size="sm" disabled={id === "hint"}
-            className="bg-transparent border-white/20 text-white hover:bg-white/10 h-9 px-3">
+          <span className="text-[10px] font-mono text-white/40 tracking-widest">{label}</span>
+          <Button
+            variant="outline"
+            onClick={handleNext}
+            disabled={id === "hint"}
+            size="sm"
+            className="bg-transparent border-white/20 text-white hover:bg-white/10 h-9 px-3"
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
 
-        {/* Download row */}
+        {/* Action buttons */}
         <div className="flex gap-2">
-          {canSaveCurrent && (
-            <Button onClick={handleSaveCurrent} variant="ghost" size="sm"
-              className="flex-1 h-8 text-[10px] text-white/50 hover:text-white/90 border border-white/10 gap-1.5">
-              <Camera className="w-3 h-3" />
+          {canSave && (
+            <Button
+              onClick={handleSaveCurrent}
+              disabled={isSaving || isSharingAll}
+              variant="ghost"
+              size="sm"
+              className="flex-1 h-10 text-[11px] text-white/60 hover:text-white border border-white/10 gap-1.5"
+            >
+              {isSaving ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Camera className="w-3.5 h-3.5" />
+              )}
               Эту карточку
             </Button>
           )}
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" disabled={isExporting}
-                className="flex-1 h-8 text-[10px] text-green-400/80 hover:text-green-300 border border-green-900/40 hover:border-green-700/60 gap-1.5">
-                {isExporting
-                  ? <><Loader2 className="w-3 h-3 animate-spin" />{exportProgress}/{gameData.players.length}</>
-                  : <><Download className="w-3 h-3" />Все карточки</>
-                }
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-60 bg-zinc-950 border-zinc-800 p-3" align="center" side="top">
-              <p className="text-xs text-white/50 mb-3">
-                Скачает ZIP со всеми <span className="text-white font-bold">{gameData.players.length}</span> карточками игроков в формате PNG
-              </p>
-              <Button onClick={handleDownloadAll} disabled={isExporting}
-                className="w-full bg-green-900/60 hover:bg-green-800/70 text-green-200 border border-green-700/50 text-xs h-9 gap-2">
-                <Download className="w-3.5 h-3.5" />
-                Скачать ZIP
-              </Button>
-            </PopoverContent>
-          </Popover>
+          <Button
+            onClick={handleShareAll}
+            disabled={isSaving || isSharingAll}
+            variant="ghost"
+            size="sm"
+            className="flex-1 h-10 text-[11px] text-green-400/80 hover:text-green-300 border border-green-900/50 hover:border-green-700/60 gap-1.5"
+          >
+            {isSharingAll ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                {progress}/{total}
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3.5 h-3.5" />
+                Все карточки
+              </>
+            )}
+          </Button>
         </div>
       </div>
     </div>
