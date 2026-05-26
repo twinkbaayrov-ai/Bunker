@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: bunker
+    description: Bunker game generation
 paths:
   /healthz:
     get:
@@ -24,6 +26,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /bunker/generate:
+    post:
+      operationId: generateGame
+      tags: [bunker]
+      summary: Generate a full Bunker game
+      description: Uses Claude AI to generate apocalypse, bunker, and all player cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameInput"
+      responses:
+        "200":
+          description: Generated game data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameData"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bunker/reshuffle:
+    post:
+      operationId: reshuffleArchetypes
+      tags: [bunker]
+      summary: Reshuffle some player archetypes
+      description: Randomly swap a few characteristics of existing players without new API call
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReshuffleInput"
+      responses:
+        "200":
+          description: Updated players
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReshuffleResult"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +89,243 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    GameInput:
+      type: object
+      required:
+        - apocalypseType
+        - playerCount
+      properties:
+        apocalypseType:
+          type: string
+          enum:
+            - ai_uprising
+            - nuclear_war
+            - virus_zombie
+            - natural_anomaly
+            - experiment
+        playerCount:
+          type: integer
+          minimum: 5
+          maximum: 11
+
+    ReshuffleInput:
+      type: object
+      required:
+        - players
+      properties:
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/Player"
+
+    ReshuffleResult:
+      type: object
+      required:
+        - players
+      properties:
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/Player"
+
+    GameData:
+      type: object
+      required:
+        - apocalypse
+        - bunker
+        - players
+      properties:
+        apocalypse:
+          $ref: "#/components/schemas/Apocalypse"
+        bunker:
+          $ref: "#/components/schemas/Bunker"
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/Player"
+
+    Apocalypse:
+      type: object
+      required:
+        - type
+        - title
+        - description
+        - threatLevel
+        - timeToImpact
+        - survivors
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        threatLevel:
+          type: string
+        timeToImpact:
+          type: string
+        survivors:
+          type: string
+
+    Bunker:
+      type: object
+      required:
+        - name
+        - location
+        - capacity
+        - duration
+        - area
+        - rooms
+        - resources
+        - specialFeature
+      properties:
+        name:
+          type: string
+        location:
+          type: string
+        capacity:
+          type: integer
+        duration:
+          type: string
+        area:
+          type: string
+        rooms:
+          type: array
+          items:
+            $ref: "#/components/schemas/Room"
+        resources:
+          type: array
+          items:
+            $ref: "#/components/schemas/Resource"
+        specialFeature:
+          type: string
+
+    Room:
+      type: object
+      required:
+        - name
+        - status
+        - description
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+            - operational
+            - damaged
+            - critical
+            - destroyed
+        description:
+          type: string
+
+    Resource:
+      type: object
+      required:
+        - name
+        - amount
+        - unit
+      properties:
+        name:
+          type: string
+        amount:
+          type: string
+        unit:
+          type: string
+
+    Player:
+      type: object
+      required:
+        - id
+        - profession
+        - gender
+        - age
+        - orientation
+        - health
+        - hobby
+        - phobia
+        - character
+        - additionalInfo
+        - knowledge
+        - baggage
+        - actionCard
+        - conditionCard
+        - motto
+        - accentColor
+        - secretConnection
+        - stats
+      properties:
+        id:
+          type: integer
+        profession:
+          type: string
+        gender:
+          type: string
+        age:
+          type: integer
+        orientation:
+          type: string
+        health:
+          type: string
+        hobby:
+          type: string
+        phobia:
+          type: string
+        character:
+          type: string
+        additionalInfo:
+          type: string
+        knowledge:
+          type: string
+        baggage:
+          type: string
+        actionCard:
+          type: string
+        conditionCard:
+          type: string
+        motto:
+          type: string
+        accentColor:
+          type: string
+        secretConnection:
+          type: string
+        stats:
+          $ref: "#/components/schemas/PlayerStats"
+
+    PlayerStats:
+      type: object
+      required:
+        - survival
+        - social
+        - physical
+        - mental
+        - utility
+      properties:
+        survival:
+          type: integer
+          minimum: 1
+          maximum: 10
+        social:
+          type: integer
+          minimum: 1
+          maximum: 10
+        physical:
+          type: integer
+          minimum: 1
+          maximum: 10
+        mental:
+          type: integer
+          minimum: 1
+          maximum: 10
+        utility:
+          type: integer
+          minimum: 1
+          maximum: 10

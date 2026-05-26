@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Бункер — Генератор для ведущего"
+version = "1.0.0"
+id = "artifacts/bunker"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19890
+
+[services.development]
+run = "pnpm --filter @workspace/bunker run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/bunker", "run", "build" ]
+publicDir = "artifacts/bunker/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19890"
+BASE_PATH = "/"
