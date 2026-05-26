@@ -1,10 +1,9 @@
 import { Player } from "@workspace/api-client-react";
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
+import { RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts";
 
 interface PlayerCardProps {
   player: Player;
   index: number;
-  forExport?: boolean;
 }
 
 function hexToRgb(hex: string) {
@@ -13,7 +12,7 @@ function hexToRgb(hex: string) {
   return { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) };
 }
 
-export default function PlayerCard({ player, index, forExport = false }: PlayerCardProps) {
+export default function PlayerCard({ player, index }: PlayerCardProps) {
   const accent = player.accentColor || "#3b82f6";
   const rgb = hexToRgb(accent);
   const accentDark = `rgb(${Math.max(0, rgb.r - 50)}, ${Math.max(0, rgb.g - 50)}, ${Math.max(0, rgb.b - 50)})`;
@@ -80,16 +79,13 @@ export default function PlayerCard({ player, index, forExport = false }: PlayerC
         </div>
       </div>
 
-      {/* Traits grid */}
+      {/* Traits */}
       <div className="px-4 pt-4 grid grid-cols-1 gap-2">
         {traits.map((t) => (
           <div key={t.label} className="flex gap-2 items-start">
             <div className="text-base leading-none mt-0.5">{t.emoji}</div>
             <div className="flex-1 min-w-0">
-              <span
-                className="text-[9px] font-bold uppercase tracking-widest mr-2"
-                style={{ color: accent }}
-              >
+              <span className="text-[9px] font-bold uppercase tracking-widest mr-2" style={{ color: accent }}>
                 {t.label}
               </span>
               <span className="text-white/85 text-[11px] leading-tight">{t.value}</span>
@@ -98,19 +94,17 @@ export default function PlayerCard({ player, index, forExport = false }: PlayerC
         ))}
       </div>
 
-      {/* Radar chart */}
+      {/* Radar chart — fixed size for reliable html2canvas capture */}
       <div className="px-4 pt-4">
         <div className="text-[9px] font-bold uppercase tracking-widest text-white/40 mb-1 text-center">
           Профиль пригодности
         </div>
-        <div className="h-36">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart cx="50%" cy="50%" outerRadius="62%" data={radarData}>
-              <PolarGrid stroke="#ffffff12" />
-              <PolarAngleAxis dataKey="subject" tick={{ fill: "#ffffff55", fontSize: 9 }} />
-              <Radar dataKey="A" stroke={accent} fill={accent} fillOpacity={0.25} />
-            </RadarChart>
-          </ResponsiveContainer>
+        <div className="flex justify-center">
+          <RadarChart width={340} height={160} cx={170} cy={80} outerRadius={58} data={radarData}>
+            <PolarGrid stroke="#ffffff12" />
+            <PolarAngleAxis dataKey="subject" tick={{ fill: "#ffffff55", fontSize: 9 }} />
+            <Radar dataKey="A" stroke={accent} fill={accent} fillOpacity={0.25} />
+          </RadarChart>
         </div>
       </div>
 
@@ -118,18 +112,18 @@ export default function PlayerCard({ player, index, forExport = false }: PlayerC
       <div className="px-4 pt-2 pb-4 grid grid-cols-2 gap-3">
         <div
           className="rounded-xl p-3"
-          style={{ background: `linear-gradient(135deg, #1a1040, #2d1b6e)`, border: "1px solid #7c3aed55" }}
+          style={{ background: "linear-gradient(135deg, #1a1040, #2d1b6e)", border: "1px solid #7c3aed55" }}
         >
-          <div className="text-[8px] font-black uppercase tracking-widest text-purple-400 mb-1.5 flex items-center gap-1">
+          <div className="text-[8px] font-black uppercase tracking-widest text-purple-400 mb-1.5">
             ⚡ Карта Действия
           </div>
           <div className="text-white text-[10px] leading-relaxed font-medium">{player.actionCard}</div>
         </div>
         <div
           className="rounded-xl p-3"
-          style={{ background: `linear-gradient(135deg, #1a0a0a, #6e1b1b)`, border: "1px solid #dc262655" }}
+          style={{ background: "linear-gradient(135deg, #1a0a0a, #6e1b1b)", border: "1px solid #dc262655" }}
         >
-          <div className="text-[8px] font-black uppercase tracking-widest text-red-400 mb-1.5 flex items-center gap-1">
+          <div className="text-[8px] font-black uppercase tracking-widest text-red-400 mb-1.5">
             🔮 Карта Состояния
           </div>
           <div className="text-white text-[10px] leading-relaxed font-medium">{player.conditionCard}</div>
@@ -138,7 +132,7 @@ export default function PlayerCard({ player, index, forExport = false }: PlayerC
 
       {/* Secret */}
       <div className="mx-4 mb-4 rounded-xl overflow-hidden" style={{ border: "1px solid #dc262633" }}>
-        <div className="bg-red-950/40 px-3 py-1.5 flex items-center gap-2">
+        <div className="bg-red-950/40 px-3 py-1.5">
           <div className="text-[8px] font-black uppercase tracking-widest text-red-500">🔒 Секретная связь</div>
         </div>
         <div className="px-3 py-2 bg-black/40">
